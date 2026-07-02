@@ -141,7 +141,12 @@ def import_page(request: Request):
             <thead><tr><th>文件</th><th>状态</th><th>详情</th></tr></thead>
             <tbody>{result_html}</tbody>
         </table>
-        <p><a href="/">← 返回联系人列表</a></p>
+        <p>
+            <a href="/">← 返回联系人列表</a> |
+            <form method="post" action="/clear" style="display:inline" onsubmit="return confirm('确定要清空所有数据？此操作不可恢复！')">
+                <button type="submit" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.9rem;text-decoration:underline;padding:0">清空所有数据</button>
+            </form>
+        </p>
     </body>
     </html>
     """
@@ -307,7 +312,13 @@ def contact_detail(contact_id: int, request: Request):
         </div>
         <div class="verdict">{init_verdict} {reply_verdict} {length_verdict}</div>
 
-        <p style="margin-top:2rem"><a href="/">← 返回联系人列表</a> | <a href="/dashboard">对比面板 →</a></p>
+        <p style="margin-top:2rem">
+            <a href="/">← 返回联系人列表</a> |
+            <a href="/dashboard">对比面板 →</a> |
+            <form method="post" action="/contact/{contact_id}/delete" style="display:inline" onsubmit="return confirm('确定要删除「{contact.name}」的所有数据？此操作不可恢复。')">
+                <button type="submit" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:1rem;text-decoration:underline;padding:0">删除此联系人</button>
+            </form>
+        </p>
     </body>
     </html>
     """
@@ -464,3 +475,17 @@ def dashboard(request: Request):
     </body>
     </html>
     """
+
+
+@router.post("/contact/{contact_id}/delete")
+def delete_contact(contact_id: int, request: Request):
+    """Delete a contact and all its data."""
+    request.app.state.storage.delete_contact(contact_id)
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/clear")
+def clear_all(request: Request):
+    """Delete all data."""
+    request.app.state.storage.clear_all()
+    return RedirectResponse("/", status_code=303)

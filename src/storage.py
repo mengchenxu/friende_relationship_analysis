@@ -215,6 +215,27 @@ class Storage:
 
 # ── Row converters ─────────────────────────────────────────
 
+    # ── Delete operations ──────────────────────────────────
+
+    def delete_contact(self, contact_id: int):
+        """Delete a contact and cascade-delete its conversation + messages."""
+        conn = self.connect()
+        conv = self.get_conversation_by_contact(contact_id)
+        if conv:
+            conn.execute("DELETE FROM message WHERE conversation_id = ?", (conv.id,))
+            conn.execute("DELETE FROM conversation WHERE id = ?", (conv.id,))
+        conn.execute("DELETE FROM contact WHERE id = ?", (contact_id,))
+        conn.commit()
+
+    def clear_all(self):
+        """Delete all messages, conversations, and contacts."""
+        conn = self.connect()
+        conn.execute("DELETE FROM message")
+        conn.execute("DELETE FROM conversation")
+        conn.execute("DELETE FROM contact")
+        conn.commit()
+
+
 def _iso(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat() if dt else None
 
