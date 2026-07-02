@@ -1,0 +1,114 @@
+{
+  "weflow": {
+    "version": "1.0.3",
+    "exportedAt": 1782970501,
+    "generator": "WeFlow"
+  },
+  "session": {
+    "wxid": "xiaoleilei169816",
+    "nickname": "贯一",
+    "remark": "大号",
+    "displayName": "大号",
+    "type": "私聊",
+    "lastTimestamp": 1781954954,
+    "messageCount": 6,
+    "avatar": "https://wx.qlogo.cn/mmhead/ver_1/LibILgb73wbeLHvb6B5aUiaiaFdNOGXbGyQg1KX7PWaHK6iaZLuOkj8GoD5RPqB1APtibNDKQ7fNCZbcicX84T9CsrFDuCsGEsPIzR9ibmIlhro0KQibkuicK5a1gDk0WPibOtj9Xu/0"
+  },
+  "messages": [
+    {
+      "localId": 1,
+      "createTime": 1781189605,
+      "formattedTime": "2026-06-11 22:53:25",
+      "type": "系统消息",
+      "localType": 10000,
+      "content": "以上是打招呼的消息",
+      "isSend": 0,
+      "senderUsername": "xiaoleilei169816",
+      "senderDisplayName": "大号",
+      "source": "",
+      "senderAvatarKey": "xiaoleilei169816",
+      "platformMessageId": "4832844028875307980"
+    },
+    {
+      "localId": 2,
+      "createTime": 1781189605,
+      "formattedTime": "2026-06-11 22:53:25",
+      "type": "文本消息",
+      "localType": 1,
+      "content": "我通过了你的朋友验证请求，现在我们可以开始聊天了",
+      "isSend": 0,
+      "senderUsername": "xiaoleilei169816",
+      "senderDisplayName": "大号",
+      "source": "",
+      "senderAvatarKey": "xiaoleilei169816",
+      "platformMessageId": "8073357704513749083"
+    },
+    {
+      "localId": 3,
+      "createTime": 1781189866,
+      "formattedTime": "2026-06-11 22:57:46",
+      "type": "链接消息",
+      "localType": 21474836529,
+      "content": "[链接] 邀请你加入群聊\nhttps://support.weixin.qq.com/cgi-bin/mmsupport-bin/addchatroombyinvite?ticket=AZJmkWsHW7psdCii%2B4bJ7w%3D%3D",
+      "isSend": 0,
+      "senderUsername": "xiaoleilei169816",
+      "senderDisplayName": "大号",
+      "source": "",
+      "senderAvatarKey": "xiaoleilei169816",
+      "platformMessageId": "2021752364612750482",
+      "appMsgType": "5",
+      "appMsgKind": "link",
+      "appMsgDesc": "\"贯一\"邀请你加入群聊\"纯哥的后宫\"，进入可查看详情。",
+      "appMsgThumbUrl": "http://wx.qlogo.cn/mmcrhead/3Xs6GyljnhLc6P4jHCuxwknEic0COmMkVA64TaU6U2x5EMkB9yVGnX4fIM3VjatJEqoKpHrLzxZE/0",
+      "linkTitle": "邀请你加入群聊",
+      "linkUrl": "https://support.weixin.qq.com/cgi-bin/mmsupport-bin/addchatroombyinvite?ticket=AZJmkWsHW7psdCii%2B4bJ7w%3D%3D",
+      "linkThumb": "http://wx.qlogo.cn/mmcrhead/3Xs6GyljnhLc6P4jHCuxwknEic0COmMkVA64TaU6U2x5EMkB9yVGnX4fIM3VjatJEqoKpHrLzxZE/0"
+    },
+    {
+      "localId": 4,
+      "createTime": 1781245888,
+      "formattedTime": "2026-06-12 14:31:28",
+      "type": "文本消息",
+      "localType": 1,
+      "content": "在不在",
+      "isSend": 0,
+      "senderUsername": "xiaoleilei169816",
+      "senderDisplayName": "大号",
+      "source": "",
+      "senderAvatarKey": "xiaoleilei169816",
+      "platformMessageId": "6100641227945447081"
+    },
+    {
+      "localId": 5,
+      "createTime": 1781245900,
+      "formattedTime": "2026-06-12 14:31:40",
+      "type": "文本消息",
+      "localType": 1,
+      "content": "鼠鼠 在吗",
+      "isSend": 0,
+      "senderUsername": "xiaoleilei169816",
+      "senderDisplayName": "大号",
+      "source": "",
+      "senderAvatarKey": "xiaoleilei169816",
+      "platformMessageId": "3244417887684127737"
+    },
+    {
+      "localId": 6,
+      "createTime": 1781954954,
+      "formattedTime": "2026-06-20 19:29:14",
+      "type": "文本消息",
+      "localType": 1,
+      "content": "周三，5月20号，行程安排：                                                                                                                          \n上午 8：20集合，8：30出发。\n\n企业: 文登  天润曲轴       \n1 2 3车一组\n4 5 车一组                                                                                                                                          (中午企业用餐，每位12元)     \n                                                                                                                               \n下午 预计15：00左右，乘车返回学校。@全体成员 ",
+      "isSend": 0,
+      "senderUsername": "xiaoleilei169816",
+      "senderDisplayName": "大号",
+      "source": "",
+      "senderAvatarKey": "xiaoleilei169816",
+      "platformMessageId": "6767551824269822587"
+    }
+  ],
+  "avatars": {
+    "xiaoleilei169816": "https://wx.qlogo.cn/mmhead/ver_1/LibILgb73wbeLHvb6B5aUiaiaFdNOGXbGyQg1KX7PWaHK6iaZLuOkj8GoD5RPqB1APtibNDKQ7fNCZbcicX84T9CsrFDuCsGEsPIzR9ibmIlhro0KQibkuicK5a1gDk0WPibOtj9Xu/0",
+    "wxid_hgla5drf0k8119": "https://wx.qlogo.cn/mmhead/ver_1/KaH0jzCLgpiaj3iaPQdoYDKzhfUP2bfSQMby5UA66TP4mhY66Sa5ibkhccoXyh4mkD6sFDYMBcTAkRoy5lBDGQHtBclCUMomZI833qbUmjIT8iaBJ2pwTn08yrbtAgdvb5qp/0"
+  }
+}

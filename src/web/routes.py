@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..adapters.testdata import TestDataAdapter
+from ..adapters.weflow import WeFlowAdapter
 from ..engine.frequency import analyze_frequency
 from ..engine.reciprocity import analyze_reciprocity
 from ..models import Sender
@@ -93,6 +94,14 @@ def import_page(request: Request):
     results = []
     for fp in files:
         try:
+            # Auto-detect format: WeFlow JSON has a "weflow" top-level key
+            with open(fp, "r", encoding="utf-8") as fh:
+                peek = json.load(fh)
+            if "weflow" in peek:
+                adapter: Adapter = WeFlowAdapter()
+            else:
+                adapter = TestDataAdapter()
+
             contacts, messages, platform = adapter.parse(str(fp))
             for contact in contacts:
                 c = storage.get_or_create_contact(contact.name, contact.platform)
