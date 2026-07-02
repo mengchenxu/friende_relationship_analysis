@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..adapters.testdata import TestDataAdapter
+from ..engine.frequency import analyze_frequency
 from ..models import Sender
 
 router = APIRouter()
@@ -126,14 +127,44 @@ def import_page(request: Request):
 
 @router.get("/contact/{contact_id}", response_class=HTMLResponse)
 def contact_detail(contact_id: int, request: Request):
-    """Detail page for a single contact — placeholder for Slice 3."""
+    """Detail page showing frequency metrics for a single contact."""
     storage = request.app.state.storage
     contact = storage.get_contact(contact_id)
     if not contact:
         return HTMLResponse("<h1>Contact not found</h1>", status_code=404)
 
     conv = storage.get_conversation_by_contact(contact_id)
-    msg_count = conv.message_count if conv else 0
+    messages = storage.get_messages(conv.id) if conv else []
+    freq = analyze_frequency(conv, messages) if conv else None
+
+    if not conv or not freq:
+        return f"""
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head><meta charset="UTF-8"><title>{contact.name}</title></head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: 2rem auto;">
+            <h1>{contact.name}</h1>
+            <p>No conversation data yet. Import messages first.</p>
+            <p><a href="/">← Back to Contacts</a></p>
+        </body>
+        </html>
+        """
+
+    # ── monthly trend rows ────────────────────────────────
+    trend_rows = ""
+    max_count = max((m["count"] for m in freq.monthly_trend), default=1) or 1
+    for m in freq.monthly_trend:
+        pct = m["count"] / max_count * 100 if max_count > 0 else 0
+        bar = f'<div style="width:{pct}%;height:16px;background:#2563eb;border-radius:3px;min-width:2px" title="{m["count"]} messages"></div>'
+        trend_rows += f"<tr><td>{m['label']}</td><td>{m['count']}</td><td style='width:60%'>{bar}</td></tr>"
+
+    # ── silent period rows ────────────────────────────────
+    silent_rows = ""
+    if freq.silent_periods:
+        for sp in freq.silent_periods:
+            silent_rows += f"<tr><td>{sp['start']}</td><td>{sp['end']}</td><td>{sp['days']} days</td></tr>"
+    else:
+        silent_rows = '<tr><td colspan="3" style="color:green">No silent periods — consistent contact!</td></tr>'
 
     return f"""
     <!DOCTYPE html>
@@ -142,16 +173,53 @@ def contact_detail(contact_id: int, request: Request):
         <meta charset="UTF-8">
         <title>{contact.name} - Friend Analysis</title>
         <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }}
+            body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; color: #1a1a1a; }}
+            h1 {{ margin-bottom: 0.25rem; }}
+            .subtitle {{ color: #666; margin-bottom: 2rem; }}
+            h2 {{ border-bottom: 2px solid #e5e7eb; padding-bottom: 0.25rem; margin-top: 2rem; }}
+            .kpi {{ display: flex; gap: 2rem; flex-wrap: wrap; margin: 1.5rem 0; }}
+            .kpi-item {{ background: #f9fafb; border-radius: 8px; padding: 1rem 1.5rem; min-width: 140px; }}
+            .kpi-label {{ font-size: 0.85rem; color: #6b7280; }}
+            .kpi-value {{ font-size: 1.75rem; font-weight: 700; color: #111827; }}
+            table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
+            th, td {{ text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb; }}
+            th {{ background: #f9fafb; font-weight: 600; font-size: 0.85rem; color: #6b7280; }}
             a {{ color: #2563eb; }}
         </style>
     </head>
     <body>
         <h1>{contact.name}</h1>
-        <p>Platform: {contact.platform}</p>
-        <p>Messages: {msg_count}</p>
-        <p>Analysis coming in Slice 3 & 4.</p>
-        <p><a href="/">← Back to Contacts</a></p>
+        <p class="subtitle">Platform: {contact.platform}</p>
+
+        <h2>📊 Overview</h2>
+        <div class="kpi">
+            <div class="kpi-item">
+                <div class="kpi-label">Total Messages</div>
+                <div class="kpi-value">{freq.total_count}</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">Time Span</div>
+                <div class="kpi-value">{freq.time_span_days}d</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">Daily Average</div>
+                <div class="kpi-value">{freq.daily_avg}</div>
+            </div>
+        </div>
+
+        <h2>📈 Monthly Trend</h2>
+        <table>
+            <thead><tr><th>Month</th><th>Messages</th><th>Volume</th></tr></thead>
+            <tbody>{trend_rows}</tbody>
+        </table>
+
+        <h2>🔇 Silent Periods (gap &gt; 7 days)</h2>
+        <table>
+            <thead><tr><th>From</th><th>To</th><th>Duration</th></tr></thead>
+            <tbody>{silent_rows}</tbody>
+        </table>
+
+        <p style="margin-top:2rem"><a href="/">← Back to Contacts</a></p>
     </body>
     </html>
     """

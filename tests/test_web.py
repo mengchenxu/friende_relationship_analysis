@@ -1,5 +1,8 @@
 """Integration tests for web routes using TestClient."""
 
+import os
+import tempfile
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,17 +12,23 @@ from src.web.app import app
 
 @pytest.fixture
 def client():
-    """Provide a TestClient with an in-memory storage backend."""
-    storage = Storage(":memory:")
-    storage.connect()
-    storage.init_db()
-
-    # Override the app's storage for the test
-    app.state.storage = storage
+    """Provide a TestClient backed by a unique temp-file DB for full isolation."""
+    fd, path = tempfile.mkstemp(suffix=".db", prefix="test_")
+    os.close(fd)
 
     with TestClient(app) as c:
+        # Replace the lifespan-created storage (data/relation.db) with our isolated one.
+        # Must happen AFTER TestClient because the lifespan runs during TestClient init.
+        if hasattr(app.state, "storage"):
+            app.state.storage.close()
+        storage = Storage(path)
+        storage.connect()
+        storage.init_db()
+        app.state.storage = storage
         yield c
-    storage.close()
+        storage.close()
+
+    os.unlink(path)
 
 
 class TestHomePage:
@@ -30,10 +39,8 @@ class TestHomePage:
 
     def test_shows_contact_after_import(self, client):
         storage = app.state.storage
-        c = storage.insert_contact(storage.get_or_create_contact("Test User", "test"))
-        conv = storage.insert_conversation(
-            storage.get_or_create_conversation(c.id)
-        )
+        storage.get_or_create_contact("Test User", "test")
+        storage.get_or_create_conversation(1)
 
         response = client.get("/")
         assert response.status_code == 200
@@ -50,8 +57,8 @@ class TestImportPage:
 class TestContactDetail:
     def test_renders_for_existing_contact(self, client):
         storage = app.state.storage
-        c = storage.insert_contact(storage.get_or_create_contact("Detail Test", "test"))
-        conv = storage.insert_conversation(storage.get_or_create_conversation(c.id))
+        c = storage.get_or_create_contact("Detail Test", "test")
+        conv = storage.get_or_create_conversation(c.id)
 
         response = client.get(f"/contact/{c.id}")
         assert response.status_code == 200
