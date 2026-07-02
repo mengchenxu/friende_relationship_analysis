@@ -1,32 +1,24 @@
 """FastAPI application entry point for the relationship analysis tool."""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
 
 from ..storage import Storage
+from .routes import router
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-app = FastAPI(title="Friend Relationship Analysis")
 
-
-@app.on_event("startup")
-def startup():
+@asynccontextmanager
+async def lifespan(application: FastAPI):
     db_path = str(BASE_DIR / "data" / "relation.db")
-    app.state.storage = Storage(db_path)
-    app.state.storage.init_db()
+    application.state.storage = Storage(db_path)
+    application.state.storage.init_db()
+    yield
+    application.state.storage.close()
 
 
-@app.get("/", response_class=HTMLResponse)
-def index():
-    return """
-    <!DOCTYPE html>
-    <html lang="zh-CN">
-    <head><meta charset="UTF-8"><title>Friend Analysis</title></head>
-    <body>
-        <h1>👋 Hello World</h1>
-        <p>Friend Relationship Analysis is running.</p>
-    </body>
-    </html>
-    """
+app = FastAPI(title="Friend Relationship Analysis", lifespan=lifespan)
+app.include_router(router)
