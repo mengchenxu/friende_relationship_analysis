@@ -35,7 +35,7 @@ class TestHomePage:
     def test_renders_when_empty(self, client):
         response = client.get("/")
         assert response.status_code == 200
-        assert "No contacts imported yet" in response.text
+        assert "暂无联系人" in response.text
 
     def test_shows_contact_after_import(self, client):
         storage = app.state.storage
@@ -51,7 +51,7 @@ class TestImportPage:
     def test_renders(self, client):
         response = client.get("/import")
         assert response.status_code == 200
-        assert "Import" in response.text
+        assert "导入" in response.text
 
 
 class TestContactDetail:

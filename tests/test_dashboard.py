@@ -34,7 +34,7 @@ class TestDashboard:
     def test_renders_when_empty(self, client):
         response = client.get("/dashboard")
         assert response.status_code == 200
-        assert "Dashboard" in response.text
+        assert "对比面板" in response.text
 
     def test_renders_with_single_contact(self, client):
         storage = app.state.storage

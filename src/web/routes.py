@@ -17,6 +17,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 IMPORTS_DIR = BASE_DIR / "data" / "imports"
 
 
+def _fmt_seconds(s: float) -> str:
+    """Format seconds into a human-readable string."""
+    if s <= 0:
+        return "-"
+    if s < 60:
+        return f"{s:.0f}秒"
+    if s < 3600:
+        return f"{s / 60:.0f}分"
+    return f"{s / 3600:.1f}时"
+
+
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request):
     storage = request.app.state.storage
@@ -39,7 +50,7 @@ def home(request: Request):
         </tr>"""
 
     if not rows:
-        rows = '<tr><td colspan="4">No contacts imported yet.</td></tr>'
+        rows = '<tr><td colspan="4">暂无联系人，请先导入数据。</td></tr>'
 
     return f"""
     <!DOCTYPE html>
@@ -60,10 +71,10 @@ def home(request: Request):
     </head>
     <body>
         <h1>👥 Friend Relationship Analysis</h1>
-        <p><a href="/import" class="import-btn">Import Chat Data</a> | <a href="/dashboard">Dashboard →</a></p>
+        <p><a href="/import" class="import-btn">导入聊天数据</a> | <a href="/dashboard">对比面板 →</a></p>
         <table>
             <thead>
-                <tr><th>Contact</th><th>Platform</th><th>Messages</th><th>Last Active</th></tr>
+                <tr><th>联系人</th><th>平台</th><th>消息数</th><th>最近活跃</th></tr>
             </thead>
             <tbody>{rows}</tbody>
         </table>
@@ -90,23 +101,23 @@ def import_page(request: Request):
                     m.conversation_id = conv.id
                 inserted = storage.bulk_insert_messages(messages)
                 storage.update_conversation_stats(conv.id)
-                results.append((fp.name, "ok", f"{len(messages)} messages"))
+                results.append((fp.name, "成功", f"{len(messages)} 条消息"))
         except Exception as e:
-            results.append((fp.name, "fail", str(e)))
+            results.append((fp.name, "失败", str(e)))
 
     result_html = ""
     for name, status, detail in results:
-        result_html += f'<tr><td>{name}</td><td style="color: {"green" if status == "ok" else "red"}">{status}</td><td>{detail}</td></tr>'
+        result_html += f'<tr><td>{name}</td><td style="color: {"green" if status == "成功" else "red"}">{status}</td><td>{detail}</td></tr>'
 
     if not result_html:
-        result_html = '<tr><td colspan="3">No import files found in data/imports/</td></tr>'
+        result_html = '<tr><td colspan="3">未找到导入文件，请将 JSON 文件放入 data/imports/ 目录。</td></tr>'
 
     return f"""
     <!DOCTYPE html>
     <html lang="zh-CN">
     <head>
         <meta charset="UTF-8">
-        <title>Import - Friend Analysis</title>
+        <title>导入 - Friend Analysis</title>
         <style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }}
             table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
@@ -116,12 +127,12 @@ def import_page(request: Request):
         </style>
     </head>
     <body>
-        <h1>📥 Import Chat Data</h1>
+        <h1>📥 导入聊天数据</h1>
         <table>
-            <thead><tr><th>File</th><th>Status</th><th>Detail</th></tr></thead>
+            <thead><tr><th>文件</th><th>状态</th><th>详情</th></tr></thead>
             <tbody>{result_html}</tbody>
         </table>
-        <p><a href="/">← Back to Contacts</a></p>
+        <p><a href="/">← 返回联系人列表</a></p>
     </body>
     </html>
     """
@@ -133,7 +144,7 @@ def contact_detail(contact_id: int, request: Request):
     storage = request.app.state.storage
     contact = storage.get_contact(contact_id)
     if not contact:
-        return HTMLResponse("<h1>Contact not found</h1>", status_code=404)
+        return HTMLResponse("<h1>联系人未找到</h1>", status_code=404)
 
     conv = storage.get_conversation_by_contact(contact_id)
     messages = storage.get_messages(conv.id) if conv else []
@@ -147,8 +158,8 @@ def contact_detail(contact_id: int, request: Request):
         <head><meta charset="UTF-8"><title>{contact.name}</title></head>
         <body style="font-family: sans-serif; max-width: 800px; margin: 2rem auto;">
             <h1>{contact.name}</h1>
-            <p>No conversation data yet. Import messages first.</p>
-            <p><a href="/">← Back to Contacts</a></p>
+            <p>暂无对话数据，请先导入消息。</p>
+            <p><a href="/">← 返回联系人列表</a></p>
         </body>
         </html>
         """
@@ -165,42 +176,34 @@ def contact_detail(contact_id: int, request: Request):
     silent_rows = ""
     if freq.silent_periods:
         for sp in freq.silent_periods:
-            silent_rows += f"<tr><td>{sp['start']}</td><td>{sp['end']}</td><td>{sp['days']} days</td></tr>"
+            silent_rows += f"<tr><td>{sp['start']}</td><td>{sp['end']}</td><td>{sp['days']}天</td></tr>"
     else:
-        silent_rows = '<tr><td colspan="3" style="color:green">No silent periods — consistent contact!</td></tr>'
-
-    # ── reciprocity helper ────────────────────────────────
-    def _fmt_seconds(s: float) -> str:
-        if s < 60:
-            return f"{s:.0f}s"
-        if s < 3600:
-            return f"{s / 60:.0f}m"
-        return f"{s / 3600:.1f}h"
+        silent_rows = '<tr><td colspan="3" style="color:green">无沉默期——联系一直很稳定！</td></tr>'
 
     # Direction: who is "driving" the conversation more
     if recip.me_initiation_rate > 0.55:
-        init_verdict = "You start most conversations."
+        init_verdict = "你发起了大部分对话。"
     elif recip.contact_initiation_rate > 0.55:
-        init_verdict = f"{contact.name} starts most conversations."
+        init_verdict = f"{contact.name}发起了大部分对话。"
     else:
-        init_verdict = "Initiation is balanced."
+        init_verdict = "双方发起对话的次数相当。"
 
     if recip.me_reply_avg_seconds > 0 and recip.contact_reply_avg_seconds > 0:
         if recip.me_reply_avg_seconds < recip.contact_reply_avg_seconds * 0.7:
-            reply_verdict = "You reply significantly faster."
+            reply_verdict = "你回复明显更快。"
         elif recip.contact_reply_avg_seconds < recip.me_reply_avg_seconds * 0.7:
-            reply_verdict = f"{contact.name} replies significantly faster."
+            reply_verdict = f"{contact.name}回复明显更快。"
         else:
-            reply_verdict = "Reply speeds are comparable."
+            reply_verdict = "双方回复速度相当。"
     else:
         reply_verdict = ""
 
     if recip.me_avg_length > recip.contact_avg_length * 1.5:
-        length_verdict = "You write more."
+        length_verdict = "你发的消息更长。"
     elif recip.contact_avg_length > recip.me_avg_length * 1.5:
-        length_verdict = f"{contact.name} writes more."
+        length_verdict = f"{contact.name}发的消息更长。"
     else:
-        length_verdict = "Message lengths are similar."
+        length_verdict = "双方消息长度接近。"
 
     return f"""
     <!DOCTYPE html>
@@ -226,76 +229,76 @@ def contact_detail(contact_id: int, request: Request):
     </head>
     <body>
         <h1>{contact.name}</h1>
-        <p class="subtitle">Platform: {contact.platform}</p>
+        <p class="subtitle">平台：{contact.platform}</p>
 
-        <h2>📊 Interaction Frequency</h2>
+        <h2>📊 互动频率</h2>
         <div class="kpi">
             <div class="kpi-item">
-                <div class="kpi-label">Total Messages</div>
+                <div class="kpi-label">消息总数</div>
                 <div class="kpi-value">{freq.total_count}</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">Time Span</div>
-                <div class="kpi-value">{freq.time_span_days}d</div>
+                <div class="kpi-label">时间跨度</div>
+                <div class="kpi-value">{freq.time_span_days}天</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">Daily Average</div>
+                <div class="kpi-label">日均消息</div>
                 <div class="kpi-value">{freq.daily_avg}</div>
             </div>
         </div>
 
-        <h2>📈 Monthly Trend</h2>
+        <h2>📈 月度趋势</h2>
         <table>
-            <thead><tr><th>Month</th><th>Messages</th><th>Volume</th></tr></thead>
+            <thead><tr><th>月份</th><th>消息数</th><th>占比</th></tr></thead>
             <tbody>{trend_rows}</tbody>
         </table>
 
-        <h2>🔇 Silent Periods (gap &gt; 7 days)</h2>
+        <h2>🔇 沉默期（间隔 &gt; 7天）</h2>
         <table>
-            <thead><tr><th>From</th><th>To</th><th>Duration</th></tr></thead>
+            <thead><tr><th>开始</th><th>结束</th><th>持续</th></tr></thead>
             <tbody>{silent_rows}</tbody>
         </table>
 
-        <h2>⚖️ Conversation Balance</h2>
+        <h2>⚖️ 对话均衡度</h2>
         <div class="kpi">
             <div class="kpi-item">
-                <div class="kpi-label">You Start</div>
+                <div class="kpi-label">你发起</div>
                 <div class="kpi-value">{recip.me_initiation_rate * 100:.0f}%</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">Your Reply Time</div>
+                <div class="kpi-label">你回复速度</div>
                 <div class="kpi-value">{_fmt_seconds(recip.me_reply_avg_seconds)}</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">Your Avg Length</div>
-                <div class="kpi-value">{recip.me_avg_length:.0f}c</div>
+                <div class="kpi-label">你消息长度</div>
+                <div class="kpi-value">{recip.me_avg_length:.0f}字</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">You Close</div>
+                <div class="kpi-label">你结束</div>
                 <div class="kpi-value">{recip.me_closure_rate * 100:.0f}%</div>
             </div>
         </div>
         <div class="kpi">
             <div class="kpi-item">
-                <div class="kpi-label">{contact.name} Starts</div>
+                <div class="kpi-label">{contact.name}发起</div>
                 <div class="kpi-value">{recip.contact_initiation_rate * 100:.0f}%</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">{contact.name} Reply Time</div>
+                <div class="kpi-label">{contact.name}回复速度</div>
                 <div class="kpi-value">{_fmt_seconds(recip.contact_reply_avg_seconds)}</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">{contact.name} Avg Length</div>
-                <div class="kpi-value">{recip.contact_avg_length:.0f}c</div>
+                <div class="kpi-label">{contact.name}消息长度</div>
+                <div class="kpi-value">{recip.contact_avg_length:.0f}字</div>
             </div>
             <div class="kpi-item">
-                <div class="kpi-label">{contact.name} Closes</div>
+                <div class="kpi-label">{contact.name}结束</div>
                 <div class="kpi-value">{recip.contact_closure_rate * 100:.0f}%</div>
             </div>
         </div>
         <div class="verdict">{init_verdict} {reply_verdict} {length_verdict}</div>
 
-        <p style="margin-top:2rem"><a href="/">← Back to Contacts</a> | <a href="/dashboard">Dashboard →</a></p>
+        <p style="margin-top:2rem"><a href="/">← 返回联系人列表</a> | <a href="/dashboard">对比面板 →</a></p>
     </body>
     </html>
     """
@@ -367,15 +370,15 @@ def dashboard(request: Request):
             <td>{i}</td>
             <td><a href="/contact/{r['id']}">{r['name']}</a></td>
             <td>{r['total']}</td>
-            <td>{r['span_days']}d</td>
+            <td>{r['span_days']}天</td>
             <td>{r['daily_avg']}</td>
             <td>{r['me_start_pct']:.0f}%</td>
-            <td>{r['contact_reply']:.0f}s / {r['me_reply']:.0f}s</td>
+            <td>{_fmt_seconds(r['contact_reply'])} / {_fmt_seconds(r['me_reply'])}</td>
         </tr>"""
 
     no_data_msg = ""
     if not rows:
-        no_data_msg = '<p style="color:#666; margin:2rem 0">No data yet. Import some chat data first.</p>'
+        no_data_msg = '<p style="color:#666; margin:2rem 0">暂无数据，请先导入聊天数据。</p>'
 
     return f"""
     <!DOCTYPE html>
@@ -396,19 +399,19 @@ def dashboard(request: Request):
         </style>
     </head>
     <body>
-        <h1>📊 Dashboard</h1>
-        <p><a href="/">← Back to Contacts</a></p>
+        <h1>📊 对比面板</h1>
+        <p><a href="/">← 返回联系人列表</a></p>
         {no_data_msg}
 
-        <h2>📈 Monthly Trend Comparison</h2>
+        <h2>📈 月度趋势对比</h2>
         <div id="trend-chart" class="chart"></div>
 
-        <h2>📊 Message Count Comparison</h2>
+        <h2>📊 消息总数对比</h2>
         <div id="bar-chart" class="chart"></div>
 
-        <h2>📋 Ranking</h2>
+        <h2>📋 排名</h2>
         <table>
-            <thead><tr><th>#</th><th>Contact</th><th>Total</th><th>Span</th><th>Daily</th><th>You Start</th><th>Reply (C/Y)</th></tr></thead>
+            <thead><tr><th>排名</th><th>联系人</th><th>总数</th><th>跨度</th><th>日均</th><th>你发起</th><th>回复（对方/你）</th></tr></thead>
             <tbody>{table_rows}</tbody>
         </table>
 
@@ -416,13 +419,13 @@ def dashboard(request: Request):
             var data = {chart_json};
             var colors = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#0891b2'];
 
-            // ── Line chart: monthly trends ──────────────────
+            // Line chart: monthly trends
             var trendChart = echarts.init(document.getElementById('trend-chart'));
             trendChart.setOption({{
                 tooltip: {{ trigger: 'axis' }},
                 legend: {{ data: data.series.map(function(s) {{ return s.name; }}) }},
                 xAxis: {{ type: 'category', data: data.months }},
-                yAxis: {{ type: 'value', name: 'Messages' }},
+                yAxis: {{ type: 'value', name: '消息数' }},
                 series: data.series.map(function(s, i) {{
                     return {{
                         name: s.name,
@@ -435,12 +438,12 @@ def dashboard(request: Request):
                 }})
             }});
 
-            // ── Bar chart: message counts ───────────────────
+            // Bar chart: message counts
             var barChart = echarts.init(document.getElementById('bar-chart'));
             barChart.setOption({{
                 tooltip: {{ trigger: 'axis' }},
                 xAxis: {{ type: 'category', data: data.barLabels }},
-                yAxis: {{ type: 'value', name: 'Total Messages' }},
+                yAxis: {{ type: 'value', name: '消息总数' }},
                 series: [{{
                     type: 'bar',
                     data: data.barValues.map(function(v, i) {{
