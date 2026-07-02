@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..adapters.testdata import TestDataAdapter
 from ..engine.frequency import analyze_frequency
+from ..engine.reciprocity import analyze_reciprocity
 from ..models import Sender
 
 router = APIRouter()
@@ -127,7 +128,7 @@ def import_page(request: Request):
 
 @router.get("/contact/{contact_id}", response_class=HTMLResponse)
 def contact_detail(contact_id: int, request: Request):
-    """Detail page showing frequency metrics for a single contact."""
+    """Detail page showing frequency + reciprocity metrics for a single contact."""
     storage = request.app.state.storage
     contact = storage.get_contact(contact_id)
     if not contact:
@@ -136,8 +137,9 @@ def contact_detail(contact_id: int, request: Request):
     conv = storage.get_conversation_by_contact(contact_id)
     messages = storage.get_messages(conv.id) if conv else []
     freq = analyze_frequency(conv, messages) if conv else None
+    recip = analyze_reciprocity(conv, messages) if conv else None
 
-    if not conv or not freq:
+    if not conv or not freq or not recip:
         return f"""
         <!DOCTYPE html>
         <html lang="zh-CN">
@@ -166,6 +168,39 @@ def contact_detail(contact_id: int, request: Request):
     else:
         silent_rows = '<tr><td colspan="3" style="color:green">No silent periods — consistent contact!</td></tr>'
 
+    # ── reciprocity helper ────────────────────────────────
+    def _fmt_seconds(s: float) -> str:
+        if s < 60:
+            return f"{s:.0f}s"
+        if s < 3600:
+            return f"{s / 60:.0f}m"
+        return f"{s / 3600:.1f}h"
+
+    # Direction: who is "driving" the conversation more
+    if recip.me_initiation_rate > 0.55:
+        init_verdict = "You start most conversations."
+    elif recip.contact_initiation_rate > 0.55:
+        init_verdict = f"{contact.name} starts most conversations."
+    else:
+        init_verdict = "Initiation is balanced."
+
+    if recip.me_reply_avg_seconds > 0 and recip.contact_reply_avg_seconds > 0:
+        if recip.me_reply_avg_seconds < recip.contact_reply_avg_seconds * 0.7:
+            reply_verdict = "You reply significantly faster."
+        elif recip.contact_reply_avg_seconds < recip.me_reply_avg_seconds * 0.7:
+            reply_verdict = f"{contact.name} replies significantly faster."
+        else:
+            reply_verdict = "Reply speeds are comparable."
+    else:
+        reply_verdict = ""
+
+    if recip.me_avg_length > recip.contact_avg_length * 1.5:
+        length_verdict = "You write more."
+    elif recip.contact_avg_length > recip.me_avg_length * 1.5:
+        length_verdict = f"{contact.name} writes more."
+    else:
+        length_verdict = "Message lengths are similar."
+
     return f"""
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -181,6 +216,7 @@ def contact_detail(contact_id: int, request: Request):
             .kpi-item {{ background: #f9fafb; border-radius: 8px; padding: 1rem 1.5rem; min-width: 140px; }}
             .kpi-label {{ font-size: 0.85rem; color: #6b7280; }}
             .kpi-value {{ font-size: 1.75rem; font-weight: 700; color: #111827; }}
+            .verdict {{ background: #eff6ff; border-left: 4px solid #2563eb; padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; font-size: 0.95rem; }}
             table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
             th, td {{ text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb; }}
             th {{ background: #f9fafb; font-weight: 600; font-size: 0.85rem; color: #6b7280; }}
@@ -191,7 +227,7 @@ def contact_detail(contact_id: int, request: Request):
         <h1>{contact.name}</h1>
         <p class="subtitle">Platform: {contact.platform}</p>
 
-        <h2>📊 Overview</h2>
+        <h2>📊 Interaction Frequency</h2>
         <div class="kpi">
             <div class="kpi-item">
                 <div class="kpi-label">Total Messages</div>
@@ -218,6 +254,45 @@ def contact_detail(contact_id: int, request: Request):
             <thead><tr><th>From</th><th>To</th><th>Duration</th></tr></thead>
             <tbody>{silent_rows}</tbody>
         </table>
+
+        <h2>⚖️ Conversation Balance</h2>
+        <div class="kpi">
+            <div class="kpi-item">
+                <div class="kpi-label">You Start</div>
+                <div class="kpi-value">{recip.me_initiation_rate * 100:.0f}%</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">Your Reply Time</div>
+                <div class="kpi-value">{_fmt_seconds(recip.me_reply_avg_seconds)}</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">Your Avg Length</div>
+                <div class="kpi-value">{recip.me_avg_length:.0f}c</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">You Close</div>
+                <div class="kpi-value">{recip.me_closure_rate * 100:.0f}%</div>
+            </div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-item">
+                <div class="kpi-label">{contact.name} Starts</div>
+                <div class="kpi-value">{recip.contact_initiation_rate * 100:.0f}%</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">{contact.name} Reply Time</div>
+                <div class="kpi-value">{_fmt_seconds(recip.contact_reply_avg_seconds)}</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">{contact.name} Avg Length</div>
+                <div class="kpi-value">{recip.contact_avg_length:.0f}c</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-label">{contact.name} Closes</div>
+                <div class="kpi-value">{recip.contact_closure_rate * 100:.0f}%</div>
+            </div>
+        </div>
+        <div class="verdict">{init_verdict} {reply_verdict} {length_verdict}</div>
 
         <p style="margin-top:2rem"><a href="/">← Back to Contacts</a></p>
     </body>
