@@ -1,5 +1,6 @@
 """Web routes for the relationship analysis application."""
 
+import json
 import os
 from pathlib import Path
 
@@ -59,7 +60,7 @@ def home(request: Request):
     </head>
     <body>
         <h1>👥 Friend Relationship Analysis</h1>
-        <p><a href="/import" class="import-btn">Import Chat Data</a></p>
+        <p><a href="/import" class="import-btn">Import Chat Data</a> | <a href="/dashboard">Dashboard →</a></p>
         <table>
             <thead>
                 <tr><th>Contact</th><th>Platform</th><th>Messages</th><th>Last Active</th></tr>
@@ -294,7 +295,160 @@ def contact_detail(contact_id: int, request: Request):
         </div>
         <div class="verdict">{init_verdict} {reply_verdict} {length_verdict}</div>
 
-        <p style="margin-top:2rem"><a href="/">← Back to Contacts</a></p>
+        <p style="margin-top:2rem"><a href="/">← Back to Contacts</a> | <a href="/dashboard">Dashboard →</a></p>
+    </body>
+    </html>
+    """
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    """Comparison dashboard with charts for all contacts."""
+    storage = request.app.state.storage
+    contacts = storage.list_contacts()
+
+    # Build data for each contact that has messages
+    rows: list[dict] = []
+    all_trends: dict[str, dict[str, int]] = {}  # contact_name -> {month_label: count}
+
+    for contact in contacts:
+        conv = storage.get_conversation_by_contact(contact.id)
+        if not conv:
+            continue
+        messages = storage.get_messages(conv.id)
+        if not messages:
+            continue
+        freq = analyze_frequency(conv, messages)
+        recip = analyze_reciprocity(conv, messages)
+
+        rows.append({
+            "id": contact.id,
+            "name": contact.name,
+            "total": freq.total_count,
+            "span_days": freq.time_span_days,
+            "daily_avg": freq.daily_avg,
+            "me_start_pct": recip.me_initiation_rate * 100,
+            "me_reply": recip.me_reply_avg_seconds,
+            "contact_reply": recip.contact_reply_avg_seconds,
+        })
+
+        trend_map: dict[str, int] = {}
+        for m in freq.monthly_trend:
+            trend_map[m["label"]] = m["count"]
+        all_trends[contact.name] = trend_map
+
+    # ── line chart data ───────────────────────────────────
+    # Collect all month labels across all contacts
+    all_months: list[str] = []
+    for trend_map in all_trends.values():
+        for month in trend_map:
+            if month not in all_months:
+                all_months.append(month)
+    all_months.sort()
+
+    series_data = []
+    for name, trend_map in all_trends.items():
+        values = [trend_map.get(month, 0) for month in all_months]
+        series_data.append({"name": name, "data": values})
+
+    chart_data = {
+        "months": all_months,
+        "series": series_data,
+        "barLabels": [r["name"] for r in rows],
+        "barValues": [r["total"] for r in rows],
+    }
+    chart_json = json.dumps(chart_data)
+
+    # ── ranking table rows ────────────────────────────────
+    table_rows = ""
+    for i, r in enumerate(rows, 1):
+        table_rows += f"""
+        <tr>
+            <td>{i}</td>
+            <td><a href="/contact/{r['id']}">{r['name']}</a></td>
+            <td>{r['total']}</td>
+            <td>{r['span_days']}d</td>
+            <td>{r['daily_avg']}</td>
+            <td>{r['me_start_pct']:.0f}%</td>
+            <td>{r['contact_reply']:.0f}s / {r['me_reply']:.0f}s</td>
+        </tr>"""
+
+    no_data_msg = ""
+    if not rows:
+        no_data_msg = '<p style="color:#666; margin:2rem 0">No data yet. Import some chat data first.</p>'
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <title>Dashboard - Friend Analysis</title>
+        <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; color: #1a1a1a; }}
+            h1 {{ margin-bottom: 0.5rem; }}
+            h2 {{ border-bottom: 2px solid #e5e7eb; padding-bottom: 0.25rem; margin-top: 2rem; }}
+            .chart {{ width: 100%; height: 400px; margin: 1rem 0; }}
+            table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
+            th, td {{ text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb; }}
+            th {{ background: #f9fafb; font-weight: 600; font-size: 0.85rem; color: #6b7280; }}
+            a {{ color: #2563eb; }}
+        </style>
+    </head>
+    <body>
+        <h1>📊 Dashboard</h1>
+        <p><a href="/">← Back to Contacts</a></p>
+        {no_data_msg}
+
+        <h2>📈 Monthly Trend Comparison</h2>
+        <div id="trend-chart" class="chart"></div>
+
+        <h2>📊 Message Count Comparison</h2>
+        <div id="bar-chart" class="chart"></div>
+
+        <h2>📋 Ranking</h2>
+        <table>
+            <thead><tr><th>#</th><th>Contact</th><th>Total</th><th>Span</th><th>Daily</th><th>You Start</th><th>Reply (C/Y)</th></tr></thead>
+            <tbody>{table_rows}</tbody>
+        </table>
+
+        <script>
+            var data = {chart_json};
+            var colors = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#0891b2'];
+
+            // ── Line chart: monthly trends ──────────────────
+            var trendChart = echarts.init(document.getElementById('trend-chart'));
+            trendChart.setOption({{
+                tooltip: {{ trigger: 'axis' }},
+                legend: {{ data: data.series.map(function(s) {{ return s.name; }}) }},
+                xAxis: {{ type: 'category', data: data.months }},
+                yAxis: {{ type: 'value', name: 'Messages' }},
+                series: data.series.map(function(s, i) {{
+                    return {{
+                        name: s.name,
+                        type: 'line',
+                        data: s.data,
+                        smooth: true,
+                        lineStyle: {{ color: colors[i % colors.length] }},
+                        itemStyle: {{ color: colors[i % colors.length] }}
+                    }};
+                }})
+            }});
+
+            // ── Bar chart: message counts ───────────────────
+            var barChart = echarts.init(document.getElementById('bar-chart'));
+            barChart.setOption({{
+                tooltip: {{ trigger: 'axis' }},
+                xAxis: {{ type: 'category', data: data.barLabels }},
+                yAxis: {{ type: 'value', name: 'Total Messages' }},
+                series: [{{
+                    type: 'bar',
+                    data: data.barValues.map(function(v, i) {{
+                        return {{ value: v, itemStyle: {{ color: colors[i % colors.length] }} }};
+                    }})
+                }}]
+            }});
+        </script>
     </body>
     </html>
     """
